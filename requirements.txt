@@ -1,5 +1,5 @@
 jaxtyping
-transformers==4.57.6
+transformers==4.57.1
 tqdm
 einops
 torch
