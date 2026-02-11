@@ -5,6 +5,24 @@ State: Experimental
 
 Abliteration pipeline for transformer-based language models, focused on identifying and neutralizing refusal-related behavior at the representation level. It loads Qwen-family or compatible causal LLMs, samples harmful and harmless instructions, and computes a refusal direction by contrasting their mean hidden states at a configurable transformer layer. The app then applies targeted orthogonalization to the model’s MLP projection weights to remove that direction, effectively steering model behavior without full retraining. Designed for reproducibility and experimentation, it supports configurable layer-depth selection, efficient inference-only execution, and clean export of both the computed refusal vector and the modified model for downstream use or sharing.
 
+## Quick Start
+
+```bash
+git clone https://github.com/PRITHIVSAKTHIUR/abliteration-c.git
+cd abliteration-c
+
+```
+
+```bash
+pip install -r requirements.txt
+
+```
+
+```bash
+python llm-abliteration-run.py
+
+```
+
 ## Apply Abliteration
 
 - Iterates through each layer.
