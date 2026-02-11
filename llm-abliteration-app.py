@@ -13,13 +13,18 @@ from huggingface_hub import HfApi, login
 
 torch.set_grad_enabled(False)
 
+# ---------------- CONFIG ----------------
+
 DEFAULT_MODEL_ID = "tiiuae/Falcon3-1B-Instruct"
-DEFAULT_LAYER_RATIO = 0.6
 INSTRUCTION_COUNT = 32
+DEFAULT_LAYER_RATIO = 0.6
 POS = -1
 
 HARMFUL_FILE = "harmful.txt"
 HARMLESS_FILE = "harmless.txt"
+
+
+# ---------------- MODEL LOADING ----------------
 
 def load_model(model_id):
     model = AutoModelForCausalLM.from_pretrained(
@@ -36,6 +41,9 @@ def load_model(model_id):
 
     return model, tokenizer
 
+
+# ---------------- DATA ----------------
+
 def read_instruction_files():
     with open(HARMFUL_FILE, "r") as f:
         harmful = f.readlines()
@@ -44,6 +52,9 @@ def read_instruction_files():
         harmless = f.readlines()
 
     return harmful, harmless
+
+
+# ---------------- CORE LOGIC ----------------
 
 def generate_hidden_states(model, tokenizer, instructions, layer_idx):
     hidden_states = []
@@ -102,6 +113,8 @@ def apply_abliteration(model, refusal_dir, layer_idx):
     return model
 
 
+# ---------------- SAVE AND PUSH ----------------
+
 def save_and_push_model(model, tokenizer, repo_id, hf_token):
     login(token=hf_token)
 
@@ -122,10 +135,12 @@ def save_and_push_model(model, tokenizer, repo_id, hf_token):
     return f"https://huggingface.co/{repo_id}"
 
 
+# ---------------- PIPELINE ----------------
+
 def run_abliteration(model_id, layer_ratio, hf_repo_id, hf_token):
     logs = []
 
-    logs.append("Loading model in full precision bfloat16")
+    logs.append("Loading model")
     model, tokenizer = load_model(model_id)
 
     logs.append("Computing refusal direction")
@@ -152,7 +167,11 @@ def run_abliteration(model_id, layer_ratio, hf_repo_id, hf_token):
     logs.append(f"Completed: {url}")
     return "\n".join(logs)
 
-with gr.Blocks(title="LLM Abliteration") as app:
+
+# ---------------- GRADIO UI ----------------
+
+with gr.Blocks(title="LLM Refusal Abliteration Tool") as app:
+    gr.Markdown("## LLM Refusal Abliteration Tool")
 
     model_id = gr.Textbox(
         value=DEFAULT_MODEL_ID,
@@ -160,8 +179,8 @@ with gr.Blocks(title="LLM Abliteration") as app:
     )
 
     layer_ratio = gr.Slider(
-        minimum=0.1,
-        maximum=0.9,
+        minimum=0.0,
+        maximum=1.0,
         value=DEFAULT_LAYER_RATIO,
         step=0.05,
         label="Layer Ratio"
