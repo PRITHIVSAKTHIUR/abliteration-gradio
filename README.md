@@ -40,4 +40,6 @@ for layer in layers:
     layer.self_attn.o_proj.weight = orthogonalize_matrix(layer.self_attn.o_proj.weight, refusal_dir)
 ```
 
-References: [sumandora / remove-refusals-with-transformers](https://github.com/sumandora/remove-refusals-with-transformers), [Maxime Labonne – Uncensor Any LLM with Abliteration](https://mlabonne.github.io/blog/posts/2024-06-04_Uncensor_any_LLM_with_abliteration.html)
+References:
+- [sumandora / remove-refusals-with-transformers](https://github.com/sumandora/remove-refusals-with-transformers)
+- [Maxime Labonne – Uncensor Any LLM with Abliteration](https://mlabonne.github.io/blog/posts/2024-06-04_Uncensor_any_LLM_with_abliteration.html)
