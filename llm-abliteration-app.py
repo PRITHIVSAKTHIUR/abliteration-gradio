@@ -1,24 +1,24 @@
 import os
 import random
 import torch
-import gradio as gr
 
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from huggingface_hub import HfApi, login
 
 
 torch.set_grad_enabled(False)
 
 # ---------------- CONFIG ----------------
 
-DEFAULT_MODEL_ID = "Qwen/Qwen3-4B-Instruct-2507"
+MODEL_ID = "Qwen/Qwen3-4B-Instruct-2507"
 INSTRUCTION_COUNT = 32
-DEFAULT_LAYER_RATIO = 0.6
+LAYER_RATIO = 0.6
 POS = -1
 
 HARMFUL_FILE = "harmful.txt"
 HARMLESS_FILE = "harmless.txt"
+
+OUTPUT_DIR = MODEL_ID.replace("/", "_") + "_abliterated"
 
 
 # ---------------- MODEL LOADING ----------------
@@ -83,14 +83,18 @@ def generate_hidden_states(model, tokenizer, instructions, layer_idx):
     return torch.stack(hidden_states)
 
 
-def compute_refusal_direction(model, tokenizer, layer_ratio):
+def compute_refusal_direction(model, tokenizer):
     harmful, harmless = read_instruction_files()
 
     harmful = random.sample(harmful, INSTRUCTION_COUNT)
     harmless = random.sample(harmless, INSTRUCTION_COUNT)
 
     total_layers = len(model.model.layers)
-    layer_idx = int(total_layers * layer_ratio)
+    layer_idx = int(total_layers * LAYER_RATIO)
+
+    print(f"Total layers: {total_layers}")
+    print(f"Using layer_ratio: {LAYER_RATIO}")
+    print(f"Computed layer_idx: {layer_idx}")
 
     harmful_hidden = generate_hidden_states(
         model, tokenizer, harmful, layer_idx
@@ -105,7 +109,7 @@ def compute_refusal_direction(model, tokenizer, layer_ratio):
     refusal_dir = harmful_mean - harmless_mean
     refusal_dir = refusal_dir / refusal_dir.norm()
 
-    return refusal_dir.squeeze(), layer_idx, total_layers
+    return refusal_dir.squeeze(), layer_idx
 
 
 def apply_abliteration(model, refusal_dir, layer_idx):
@@ -120,96 +124,32 @@ def apply_abliteration(model, refusal_dir, layer_idx):
     return model
 
 
-# ---------------- SAVE AND PUSH ----------------
+# ---------------- MAIN PIPELINE ----------------
 
-def save_and_push_model(model, tokenizer, repo_id, hf_token):
-    login(token=hf_token)
+def main():
+    print("Loading model")
+    model, tokenizer = load_model(MODEL_ID)
 
-    local_dir = repo_id.replace("/", "_")
-    os.makedirs(local_dir, exist_ok=True)
-
-    model.save_pretrained(local_dir, safe_serialization=True)
-    tokenizer.save_pretrained(local_dir)
-
-    api = HfApi()
-    api.create_repo(repo_id, exist_ok=True)
-    api.upload_folder(
-        repo_id=repo_id,
-        folder_path=local_dir,
-        path_in_repo=""
+    print("Computing refusal direction")
+    refusal_dir, layer_idx = compute_refusal_direction(
+        model, tokenizer
     )
 
-    return f"https://huggingface.co/{repo_id}"
-
-
-# ---------------- PIPELINE ----------------
-
-def run_abliteration(model_id, layer_ratio, hf_repo_id, hf_token):
-    logs = []
-
-    logs.append("Loading model")
-    model, tokenizer = load_model(model_id)
-
-    logs.append("Computing refusal direction")
-    refusal_dir, layer_idx, total_layers = compute_refusal_direction(
-        model, tokenizer, layer_ratio
-    )
-
-    refusal_path = model_id.replace("/", "_") + "_refusal_dir.pt"
+    refusal_path = MODEL_ID.replace("/", "_") + "_refusal_dir.pt"
     torch.save(refusal_dir, refusal_path)
+    print(f"Saved refusal direction to {refusal_path}")
 
-    logs.append(f"Total layers: {total_layers}")
-    logs.append(f"Layer ratio: {layer_ratio}")
-    logs.append(f"Using layer_idx: {layer_idx}")
-    logs.append(f"Saved refusal direction to {refusal_path}")
-
-    logs.append("Applying abliteration")
+    print("Applying abliteration")
     model = apply_abliteration(model, refusal_dir, layer_idx)
 
-    logs.append("Saving and pushing model")
-    url = save_and_push_model(model, tokenizer, hf_repo_id, hf_token)
+    print("Saving abliterated model locally")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    model.save_pretrained(OUTPUT_DIR, safe_serialization=True)
+    tokenizer.save_pretrained(OUTPUT_DIR)
 
-    logs.append(f"Completed: {url}")
-    return "\n".join(logs)
-
-
-# ---------------- GRADIO UI ----------------
-
-with gr.Blocks(title="LLM Refusal Abliteration Tool") as app:
-    gr.Markdown("## LLM Refusal Abliteration Tool")
-
-    model_id = gr.Textbox(
-        value=DEFAULT_MODEL_ID,
-        label="Base Model ID"
-    )
-
-    layer_ratio = gr.Slider(
-        minimum=0.0,
-        maximum=1.0,
-        value=DEFAULT_LAYER_RATIO,
-        step=0.05,
-        label="Layer Ratio"
-    )
-
-    hf_repo_id = gr.Textbox(
-        label="Hugging Face Repository (username/model-name)"
-    )
-
-    hf_token = gr.Textbox(
-        type="password",
-        label="Hugging Face Token"
-    )
-
-    run_btn = gr.Button("Run Abliteration and Push Model")
-
-    output = gr.Textbox(lines=14, label="Logs")
-
-    run_btn.click(
-        fn=run_abliteration,
-        inputs=[model_id, layer_ratio, hf_repo_id, hf_token],
-        outputs=output
-    )
+    print(f"Abliterated model saved to {OUTPUT_DIR}")
+    print("Done")
 
 
 if __name__ == "__main__":
-    app.launch(debug=True, share=True)
+    main()
